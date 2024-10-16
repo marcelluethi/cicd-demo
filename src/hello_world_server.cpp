@@ -6,7 +6,7 @@
 Server::Server(const std::string &host, int port) : host_(host), port_(port) {
     // Define the /hello endpoint that responds with "world"
     svr_.Get("/hello", [](const httplib::Request &, httplib::Response &res) {
-        res.set_content("Hello SE Students", "text/plain");
+        res.set_content("SE Students", "text/plain");
     });
 }
 

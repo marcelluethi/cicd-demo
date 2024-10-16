@@ -10,9 +10,9 @@ variables:
 # Build job
 build-server:
   stage: build
-  image: gcc:latest  # Use a GCC Docker image that includes CMake and other build tools
+  image: gcc:13.2.0 
   script:
-    - apt-get update && apt-get install -y cmake
+    - apt-get update && apt-get install -y cmake libpthread-stubs0-dev openssh-client rsync 
     # Create a build directory and navigate into it
     - mkdir -p $BUILD_DIR
     - cd $BUILD_DIR
@@ -24,13 +24,13 @@ build-server:
     paths:
       - $BUILD_DIR/  # Store the build output as artifacts for other jobs (like deploy)
 
-
 run-tests:
   stage: test
   image: gcc:latest
   dependencies:
     - build-server  # Use the build output from the previous build job
   script:
+    - apt-get update && apt-get install -y cmake  
     - cd $BUILD_DIR
     # Run the tests using CTest (CMake's built-in testing tool)
     - ctest --output-on-failure
@@ -40,39 +40,69 @@ run-tests:
     paths:
       - $BUILD_DIR/Testing/Temporary/LastTest.log  # Include the test log as an artifact
 
+
+# deploy-docker:
+#   stage: build
+#   image: docker:latest 
+#   services:
+#     - docker:dind
+#   script:
+#     - docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PASSWORD"
+#     - docker build -t cicddemo .
+#     - docker tag cicddemo:latest $DOCKER_USERNAME/cicddemo:latest
+#     - docker push $DOCKER_USERNAME/cicddemo:latest
+
+
+
 # Deploy the application to the remote server
-deploy-to-server:
-  stage: deploy
-  environment: production
-  only:
-    - main
-  script:
-    # Step 1: Set up SSH key
-    - mkdir -p ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-    - chmod 600 ~/.ssh/id_rsa
-    - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+# deploy-to-server:
+#   stage: deploy
+#   environment: production
+#   only:
+#     - main
+#   script:
+#     - mkdir -p ~/.ssh
+#     - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+#     - chmod 600 ~/.ssh/id_rsa
+#     - ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts
+#     - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+#     # - ssh -i ~/.ssh/id_rsa -p 22 $SSH_USER@$SERVER_IP << EOF
+#     #     # Navigate to the server directory and stop the old server (if running)
+#     #     touch /tmp/i_was_there
+#     # EOF
 
-    # Step 2: Rsync the built JAR file to the remote server
-    - rsync -avz --delete -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" $BUILD_DIR/src/hello_world_server $SSH_USER@$q:$SERVER_PATH
+#     # # Step 2: Rsync the built JAR file to the remote server
+#     # #- rsync -avz --delete -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" $BUILD_DIR/src/hello_world_server $SSH_USER@$q:$SERVER_PATH
+#     # # Step 3: SSH into the server and deploy
+#     # - ssh -i ~/.ssh/id_rsa -p 22 $SSH_USER@$SERVER_IP << EOF
+#     #     # Navigate to the server directory and stop the old server (if running)
+#     #     cd $SERVER_PATH || echo "Cannot change to directory" 
+#     #     # Kill server if another one is running
+#     #     PID=\$(pgrep -f 'CDDemo-1.0-SNAPSHOT.jar')
+#     #     if [ -n "\$PID" ]; then
+#     #       kill \$PID
+#     #       echo "Waiting for process to terminate..."
+#     #       sleep 5  # Add a 5-second delay
+#     #     fi      
+#     #     # Start the new server
+#     #     nohup java -jar $SERVER_PATH/CDDemo-1.0-SNAPSHOT.jar > output.log 2>&1 &
+#     # EOF
 
-    # Step 3: SSH into the server and deploy
-    # - ssh -i ~/.ssh/id_rsa -p 22 $SSH_USER@$SERVER_IP << EOF
-    #     # Navigate to the server directory and stop the old server (if running)
-    #     cd $SERVER_PATH || echo "Cannot change to directory"
-        
-    #     # Kill server if another one is running
-    #     PID=\$(pgrep -f 'CDDemo-1.0-SNAPSHOT.jar')
-    #     if [ -n "\$PID" ]; then
-    #       kill \$PID
-    #       echo "Waiting for process to terminate..."
-    #       sleep 5  # Add a 5-second delay
-    #     fi
-        
-    #     # Start the new server
-    #     nohup java -jar $SERVER_PATH/CDDemo-1.0-SNAPSHOT.jar > output.log 2>&1 &
-    # EOF
+# # Prevent simultaneous deployments (if necessary)
+#   interruptible: true
 
-# Prevent simultaneous deployments (if necessary)
-  interruptible: true
-
+# deploy:
+#   stage: deploy
+#   only:
+#     - main
+#   before_script:
+#     - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client rsync -y )'
+#     - eval $(ssh-agent -s)
+#     - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+#     - mkdir -p ~/.ssh
+#     - chmod 700 ~/.ssh
+#     - echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+#     - chmod 644 ~/.ssh/known_hosts
+#   script:
+#     - ssh -o StrictHostKeyChecking=no deploy@www.contrafactus.ch "cd '/tmp/'; touch i_was_here_again"
+#     - rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" $BUILD_DIR/src/hello_world_server deploy@www.contrafactus.ch:/home/deploy/

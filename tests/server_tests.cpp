@@ -1,4 +1,4 @@
-d // server_tests.cpp
+// server_tests.cpp
 #include "hello_world_server.h"
 #include <gtest/gtest.h>
 #include <httplib.h>
@@ -35,7 +35,7 @@ TEST_F(ServerTest, HelloEndpointReturnsWorld) {
     // Check that the response is valid and has the correct content
     ASSERT_TRUE(res != nullptr);
     EXPECT_EQ(res->status, 200);
-    EXPECT_EQ(res->body, "world");
+    EXPECT_EQ(res->body, "SE Students");
 }
 
 // Test case for an unknown endpoint
